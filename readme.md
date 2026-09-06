@@ -4,7 +4,9 @@
 
 这些 Skill 以可导入的 `.skill.json` 文件提供，用于自动化浏览抖音视频、获取视频下载地址、读取评论、搜索结果、用户作品和用户信息。
 
-注意：skill使用基于免费工具tobub （https://github.com/pow505/tobub）
+注意：skill使用基于免费工具tobub 
+
+https://github.com/pow505/tobub
 
 ## Features
 
