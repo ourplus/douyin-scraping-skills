@@ -1,0 +1,395 @@
+{
+  "package_type": "tobub_skill",
+  "manifest_version": 1,
+  "package_id": "user:douyin-get-user-videos@1.0.0",
+  "package_version": "1.0.0",
+  "source": "user",
+  "created_at": "2026-09-06T00:00:00+08:00",
+  "requirements": {
+    "platform": "required",
+    "rule": "required"
+  },
+  "skill": {
+    "market_skill_id": "douyin-get-user-videos",
+    "release_id": "local-tests-20260906",
+    "name": "抖音获取用户作品",
+    "source_type": "local",
+    "skill_code": "const uid = String(tobub.params.uid);\nconst maxScrollTimes = Number(tobub.params.maxScrollTimes);\nawait tobub.adapter.navigate({ url: \"https://www.douyin.com/user/\" + uid, waitUntil: \"domcontentloaded\" });\nawait tobub.atoms.waitFor({ title: \"的抖音\", titleMatch: \"contains\", timeout: 15000 });\nawait tobub.adapter.dismissPopups();\nconst location = await tobub.adapter.getCurrentLocation();\nconst userDetails = await tobub.atoms.extractItem({\n  selector: \"#user_detail_element\",\n  fields: [\n    { name: \"avatarUrl\", selector: 'span[data-e2e=\"live-avatar\"] img', source: \"src\" },\n    { name: \"nickname\", selector: 'div[data-e2e=\"user-info\"] h1', source: \"text\" },\n    { name: \"followText\", selector: '[data-e2e=\"user-info-follow\"]', source: \"text\" },\n    { name: \"fansText\", selector: '[data-e2e=\"user-info-fans\"]', source: \"text\" },\n    { name: \"likeText\", selector: '[data-e2e=\"user-info-like\"]', source: \"text\" },\n    { name: \"douyinId\", selector: 'span:has-text(\"抖音号：\")', source: \"text\", match: { pattern: \"抖音号：(.+)\" } },\n    { name: \"ipLocation\", selector: 'span:has-text(\"IP属地：\")', source: \"text\", match: { pattern: \"IP属地：(.+)\" } },\n    { name: \"remark\", selector: 'div[data-e2e=\"user-info\"] > div:last-child', source: \"text\" }\n  ]\n});\nconst works = await tobub.atoms.extractItem({ selector: \"div#user-tabbar\", fields: [{ name: \"count\", selector: 'span[data-e2e=\"user-tab-count\"]', source: \"textContent\" }] });\nconst userUrl = location.url || \"https://www.douyin.com/user/\" + uid;\nconst userContent = await tobub.db.saveContent({\n  platform: \"douyin\",\n  contentType: \"user\",\n  externalId: uid,\n  title: userDetails.nickname ?? uid,\n  summary: userDetails.remark ?? \"\",\n  url: userUrl,\n  metadata: { ...userDetails, uid, works: works.count ?? \"\" },\n  rawData: userDetails\n});\nconst records = [];\nfor (let i = 0; i < maxScrollTimes; i++) {\n  await tobub.atoms.waitFor({ delay: 3200 });\n  await tobub.atoms.scroll({ mode: \"viewport\", distance: tobub.utils.randInt(390, 1200), steps: tobub.utils.randInt(3, 15), stepPauseRange: [10, 25] });\n  const postList = await tobub.adapter.extract(\"post_list\", { scan: { mode: \"append\" } });\n  for (const record of postList.records) {\n    records.push(record);\n    const fields = record.fields ?? {};\n    const externalId = String(record.id || \"\");\n    if (!externalId) continue;\n    await tobub.db.saveContent({\n      platform: \"douyin\",\n      contentType: \"video\",\n      externalId,\n      parentId: userContent.contentItemId,\n      title: fields.intro ?? \"抖音视频 \" + externalId,\n      summary: fields.status ?? \"\",\n      url: \"https://www.douyin.com/video/\" + externalId,\n      metadata: {\n        image: fields.image ?? \"\",\n        status: fields.status ?? \"\",\n        comments: fields.comments ?? \"0\"\n      },\n      rawData: fields\n    });\n  }\n  if (postList.scannedCount === 0) {\n    const endState = await tobub.atoms.condition({ type: \"text\", selector: \"body\", text: \"暂时没有更多了\", timeout: 250, throwOnTimeout: false });\n    if (endState.satisfied) break;\n  }\n}\nreturn { user: { ...userDetails, uid, works: works.count, url: userUrl }, records };",
+    "platform": "douyin",
+    "input_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uid"
+      ],
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxScrollTimes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 5
+        }
+      }
+    },
+    "output_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "user",
+        "records"
+      ],
+      "properties": {
+        "user": {
+          "type": "object"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ui_schema": {
+      "version": 1,
+      "fields": [
+        {
+          "key": "uid",
+          "label": "用户 ID",
+          "type": "text",
+          "target": "params.uid",
+          "required": true
+        },
+        {
+          "key": "maxScrollTimes",
+          "label": "最大滚动次数",
+          "type": "number",
+          "target": "params.maxScrollTimes",
+          "required": true,
+          "default": 5
+        }
+      ]
+    },
+    "requirements": {
+      "account": "optional",
+      "profile": "optional",
+      "domain_rule": "required"
+    },
+    "defaults": {
+      "params": {
+        "uid": "MS4wLjABAAAA9ELHW8jyg774nZapYbjUNndTkXn5OogsioGtOq8KLiU",
+        "maxScrollTimes": 5
+      },
+      "browser": {
+        "run_mode": "transient",
+        "headless": false,
+        "transient": {
+          "viewport": {
+            "width": 1534,
+            "height": 864
+          }
+        }
+      }
+    },
+    "metadata": {
+      "category": "user",
+      "source": "community",
+      "market_skill_id": "douyin-get-user-videos",
+      "tags": [
+        "抖音",
+        "用户",
+        "作品",
+        "采集"
+      ],
+      "description": "打开抖音用户主页，提取用户信息并滚动采集用户作品。",
+      "converted_from": "tests/抖音"
+    }
+  },
+  "platform": {
+    "code": "douyin",
+    "name": "抖音",
+    "version": "1.0.0",
+    "base_url": "https://www.douyin.com",
+    "capabilities": [
+      "view_list_item",
+      "view_detail",
+      "scroll",
+      "comment"
+    ],
+    "domains": [
+      {
+        "domain": "douyin.com",
+        "domain_type": "primary"
+      }
+    ],
+    "definition_hash": "ad7e98dba475a6cc1d48ca2cec62af6936726a4588dd34b895850192acae1d7c"
+  },
+  "rule": {
+    "platform": "douyin",
+    "version": "1.0.0",
+    "schema_version": "1",
+    "hash": "fb47241644ce0e340b963207f02905f6264a4661c4876c7ca5ee12fd5ef504ad",
+    "rules": {
+      "platform": "douyin",
+      "version": "1.0.0",
+      "meta": {
+        "name": "抖音",
+        "baseUrl": "https://www.douyin.com",
+        "capabilities": [
+          "view_list_item",
+          "view_detail",
+          "scroll",
+          "comment"
+        ],
+        "titlePattern": "抖音"
+      },
+      "routes": {
+        "home": {
+          "url": "https://www.douyin.com",
+          "check": {
+            "url": "https://www.douyin.com/jingxuan"
+          }
+        },
+        "recommend": {
+          "locator": "div[data-e2e=\"douyin-navigation\"] >> text=推荐",
+          "check": {
+            "url": "https://www.douyin.com/?recommend=1"
+          }
+        },
+        "jingxuan": {
+          "locator": "div[data-e2e=\"douyin-navigation\"] >> text=精选",
+          "url": "https://www.douyin.com/jingxuan"
+        }
+      },
+      "extractors": {
+        "post_list": {
+          "itemSelector": "ul[data-e2e=\"scroll-list\"] li",
+          "idField": "id",
+          "fields": [
+            {
+              "name": "id",
+              "selector": "a[href^=\"/video/\"]",
+              "source": "href",
+              "match": "/video/(\\d+)",
+              "fallback": ""
+            },
+            {
+              "name": "url",
+              "selector": "a[href^=\"/video/\"]",
+              "source": "href",
+              "match": "(/video/\\d+)",
+              "prefix": "https://www.abc.com",
+              "fallback": ""
+            },
+            {
+              "name": "image",
+              "selector": "a[href^=\"/video/\"] img",
+              "source": "src",
+              "fallback": ""
+            },
+            {
+              "name": "status",
+              "selector": "[aria-label^=\"Tag:\"]",
+              "source": {
+                "attr": "aria-label"
+              },
+              "match": "Tag:\\s*(.+)",
+              "fallback": ""
+            },
+            {
+              "name": "comments",
+              "selector": ".author-card-user-video-like span:last-child",
+              "source": "text",
+              "fallback": "0"
+            },
+            {
+              "name": "intro",
+              "selector": "a[href^=\"/video/\"] img",
+              "source": {
+                "attr": "alt"
+              },
+              "fallback": ""
+            }
+          ]
+        },
+        "content_comment_list": {
+          "itemSelector": "div[data-e2e=\"comment-item\"]",
+          "idField": "userUuid",
+          "readiness": ".comment-item-avatar a",
+          "fields": [
+            {
+              "name": "userUuid",
+              "selector": ".comment-item-avatar a[href*=\"/user/\"]",
+              "source": {
+                "attr": "href"
+              },
+              "match": "/user/([\\w-]+)"
+            },
+            {
+              "name": "userAvatar",
+              "selector": ".comment-item-avatar a[href*=\"/user/\"] img",
+              "source": "src"
+            },
+            {
+              "name": "userNickname",
+              "selector": ".comment-item-avatar a[href*=\"/user/\"] img",
+              "source": {
+                "attr": "alt"
+              },
+              "match": "^(.+?)头像"
+            },
+            {
+              "name": "comment",
+              "selector": ".comment-item-info-wrap + div span",
+              "source": "text"
+            },
+            {
+              "name": "time",
+              "selector": ".comment-item-info-wrap + div + div span",
+              "source": "text",
+              "match": "^([^·]+)"
+            },
+            {
+              "name": "location",
+              "selector": ".comment-item-info-wrap + div + div span",
+              "source": "text",
+              "match": "·(.+)$"
+            },
+            {
+              "name": "replyCount",
+              "selector": ".replyContainer button",
+              "source": "text",
+              "match": "(\\d+)",
+              "fallback": "0"
+            }
+          ]
+        },
+        "content_info": {
+          "itemSelector": "div.parent-route-container.route-scroll-container",
+          "idField": "vid",
+          "fields": [
+            {
+              "name": "author",
+              "selector": "span.account-name-text",
+              "source": "text"
+            },
+            {
+              "name": "time",
+              "selector": "div.video-create-time",
+              "source": "text"
+            },
+            {
+              "name": "intro",
+              "selector": "div[data-e2e=\"video-desc\"]",
+              "source": "text"
+            },
+            {
+              "name": "like",
+              "selector": "div[data-e2e=\"video-player-digg\"]",
+              "source": "text"
+            },
+            {
+              "name": "comment",
+              "selector": "div[data-e2e=\"feed-comment-icon\"]",
+              "source": "text"
+            },
+            {
+              "name": "collect",
+              "selector": "div[data-e2e=\"video-player-collect\"]",
+              "source": "text"
+            },
+            {
+              "name": "share",
+              "selector": "div[data-e2e=\"video-player-share\"]",
+              "source": "text"
+            },
+            {
+              "name": "vid",
+              "selector": "div[data-e2e-vid]",
+              "source": {
+                "attr": "data-e2e-vid"
+              }
+            },
+            {
+              "name": "uid",
+              "selector": "a[data-e2e=\"video-avatar\"]",
+              "source": {
+                "attr": "href"
+              },
+              "match": "/user/([\\w-]+)"
+            }
+          ]
+        },
+        "search_videos": {
+          "itemSelector": "div#waterFallScrollContainer > div",
+          "idField": "vid",
+          "fields": [
+            {
+              "name": "vid",
+              "source": {
+                "attr": "id"
+              },
+              "match": "waterfall_item_(\\d+)"
+            },
+            {
+              "name": "thumb",
+              "selector": "div.search-result-card div.videoImage img",
+              "source": "src"
+            },
+            {
+              "name": "duration",
+              "selector": "div.search-result-card div.videoImage div",
+              "source": "text",
+              "match": "\\d{1,2}:\\d{2}"
+            },
+            {
+              "name": "like",
+              "selector": "div.search-result-card div.videoImage svg + span",
+              "source": "text"
+            },
+            {
+              "name": "intro",
+              "selector": "div.search-result-card div.videoImage + div > div > div:not(:has(> span))",
+              "source": "text"
+            },
+            {
+              "name": "author",
+              "selector": "div.search-result-card div.videoImage + div span:text-is(\"@\") + span",
+              "source": "text"
+            },
+            {
+              "name": "time",
+              "selector": "div.search-result-card div.videoImage + div span:has-text(\" · \")",
+              "source": "text"
+            }
+          ]
+        }
+      },
+      "actions": {
+        "dismissPopups": {
+          "steps": [
+            {
+              "atom": "dismiss",
+              "options": {
+                "selector": "div:text('登录后免费畅享高清视频') + div"
+              }
+            },
+            {
+              "atom": "dismiss",
+              "options": {
+                "selector": "#douyin-web-recommend-guide-mask"
+              }
+            }
+          ]
+        }
+      },
+      "selectors": {},
+      "anomalyChecks": [],
+      "locationPatterns": []
+    }
+  }
+}
