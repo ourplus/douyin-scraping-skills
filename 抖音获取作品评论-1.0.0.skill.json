@@ -12,6 +12,7 @@
     "market_skill_id": "douyin-get-video-comments",
     "release_id": "local-tests-20260906",
     "name": "抖音获取作品评论",
+    "skill_version": "1.0.0",
     "source_type": "local",
     "skill_code": "const vid = String(tobub.params.vid);\nconst count = Number(tobub.params.count);\nconst records = [];\nconst videoContent = await tobub.db.saveContent({\n  platform: \"douyin\",\n  contentType: \"video\",\n  externalId: vid,\n  title: \"抖音视频 \" + vid,\n  url: \"https://www.douyin.com/video/\" + vid,\n  rawData: { videoId: vid }\n});\nawait tobub.adapter.navigate({ url: \"https://www.douyin.com/video/\" + vid, waitUntil: \"domcontentloaded\" });\nawait tobub.atoms.waitFor({ selector: 'div[data-scroll=\"comment\"]', selectorState: \"attached\" }, { timeout: 15000 });\nawait tobub.adapter.dismissPopups();\nawait tobub.atoms.waitFor([3000, 6000]);\nfor (let i = 0; i < 999 ; i++) {\n  if (tobub.utils.chance(0.5)) {\n    await tobub.atoms.scroll({ mode: \"viewport\", distance: tobub.utils.randInt(390, 1200), steps: tobub.utils.randInt(3, 15), stepPauseRange: [10, 25] });\n  } else {\n    await tobub.atoms.scroll({ mode: \"viewport\", distance: 500, steps: 1, stepPauseRange: [10, 25] });\n  }\n  await tobub.atoms.waitFor([800, 2000]);\n  const postList = await tobub.adapter.extract(\"content_comment_list\", { scan: { mode: \"append\" } });\n  for (const record of postList.records) {\n    if (records.length >= count) break\n    const fields = record.fields ?? {};\n    const commenterId = String(record.id || fields.userUuid || \"\");\n    const externalId = commenterId ? vid + \":\" + commenterId : \"\";\n    if (!externalId) continue;\n    await tobub.db.saveContent({\n      platform: \"douyin\",\n      contentType: \"comment\",\n      externalId,\n      parentId: videoContent.contentItemId,\n      title: fields.comment ?? \"抖音评论\",\n      summary: fields.userNickname ?? \"\",\n      url: \"https://www.douyin.com/video/\" + vid,\n      metadata: {\n        videoId: vid,\n        userUuid: fields.userUuid ?? commenterId,\n        userAvatar: fields.userAvatar ?? \"\",\n        time: fields.time ?? \"\",\n        location: fields.location ?? \"\",\n        replyCount: fields.replyCount ?? \"0\"\n      },\n      rawData: fields\n    });\n    records.push(record);\n  }\n  if (postList.scannedCount === 0) {\n    const endState = await tobub.atoms.condition({ type: \"text\", selector: \"body\", text: \"暂时没有更多评论\", throwOnTimeout: false }, { timeout: 250 });\n    if (endState.satisfied) break;\n  }\n  if (records.length >= count) break\n}\nreturn { videoId: vid, records };",
     "platform": "douyin",
@@ -135,7 +136,7 @@
     "platform": "douyin",
     "version": "1.0.0",
     "schema_version": "1",
-    "hash": "d7c17a1c5496aa08a23367d8e3c04814949a72ad79d885c740b00a9adee4be30",
+    "hash": "dbc9ec56d97e3b8e89b26bc980c1d963a252c7b6ccfd5732e8683646c6d53e5e",
     "rules": {
       "actions": {
         "dismissPopups": {
@@ -160,12 +161,19 @@
         "content_comment_list": {
           "fields": [
             {
-              "match": "/user/([\\w-]+)",
               "name": "userUuid",
               "selector": ".comment-item-avatar a[href*=\"/user/\"]",
               "source": {
                 "attr": "href"
-              }
+              },
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "/user/([\\w-]+)"
+                  }
+                }
+              ]
             },
             {
               "name": "userAvatar",
@@ -173,12 +181,19 @@
               "source": "src"
             },
             {
-              "match": "^(.+?)头像",
               "name": "userNickname",
               "selector": ".comment-item-avatar a[href*=\"/user/\"] img",
               "source": {
                 "attr": "alt"
-              }
+              },
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "^(.+?)头像"
+                  }
+                }
+              ]
             },
             {
               "name": "comment",
@@ -186,23 +201,44 @@
               "source": "text"
             },
             {
-              "match": "^([^·]+)",
               "name": "time",
               "selector": ".comment-item-info-wrap + div + div span",
-              "source": "text"
+              "source": "text",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "^([^·]+)"
+                  }
+                }
+              ]
             },
             {
-              "match": "·(.+)$",
               "name": "location",
               "selector": ".comment-item-info-wrap + div + div span",
-              "source": "text"
+              "source": "text",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "·(.+)$"
+                  }
+                }
+              ]
             },
             {
               "fallback": "0",
-              "match": "(\\d+)",
               "name": "replyCount",
               "selector": ".replyContainer button",
-              "source": "text"
+              "source": "text",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "(\\d+)"
+                  }
+                }
+              ]
             }
           ],
           "idField": "userUuid",
@@ -254,12 +290,19 @@
               }
             },
             {
-              "match": "/user/([\\w-]+)",
               "name": "uid",
               "selector": "a[data-e2e=\"video-avatar\"]",
               "source": {
                 "attr": "href"
-              }
+              },
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "/user/([\\w-]+)"
+                  }
+                }
+              ]
             }
           ],
           "idField": "vid",
@@ -269,18 +312,35 @@
           "fields": [
             {
               "fallback": "",
-              "match": "/video/(\\d+)",
               "name": "id",
               "selector": "a[href^=\"/video/\"]",
-              "source": "href"
+              "source": "href",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "/video/(\\d+)"
+                  }
+                }
+              ]
             },
             {
               "fallback": "",
-              "match": "(/video/\\d+)",
               "name": "url",
-              "prefix": "https://www.abc.com",
               "selector": "a[href^=\"/video/\"]",
-              "source": "href"
+              "source": "href",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "(/video/\\d+)"
+                  }
+                },
+                {
+                  "type": "prefix",
+                  "value": "https://www.abc.com"
+                }
+              ]
             },
             {
               "fallback": "",
@@ -290,12 +350,19 @@
             },
             {
               "fallback": "",
-              "match": "Tag:\\s*(.+)",
               "name": "status",
               "selector": "[aria-label^=\"Tag:\"]",
               "source": {
                 "attr": "aria-label"
-              }
+              },
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "Tag:\\s*(.+)"
+                  }
+                }
+              ]
             },
             {
               "fallback": "0",
@@ -318,11 +385,18 @@
         "search_videos": {
           "fields": [
             {
-              "match": "waterfall_item_(\\d+)",
               "name": "vid",
               "source": {
                 "attr": "id"
-              }
+              },
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "waterfall_item_(\\d+)"
+                  }
+                }
+              ]
             },
             {
               "name": "thumb",
@@ -330,10 +404,17 @@
               "source": "src"
             },
             {
-              "match": "\\d{1,2}:\\d{2}",
               "name": "duration",
               "selector": "div.search-result-card div.videoImage div",
-              "source": "text"
+              "source": "text",
+              "transforms": [
+                {
+                  "type": "match",
+                  "pattern": {
+                    "pattern": "\\d{1,2}:\\d{2}"
+                  }
+                }
+              ]
             },
             {
               "name": "like",

@@ -10,6 +10,8 @@ https://github.com/pow505/tobub
 
 ## Features
 
+![图片说明](./profile.png)
+
 - 抖音视频自动化浏览
 - 获取抖音视频播放和下载地址
 - 获取视频作品评论
